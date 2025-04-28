@@ -175,3 +175,6 @@ cython_debug/
 
 # Data
 Data/
+
+# Model Outputs
+model_outputs/

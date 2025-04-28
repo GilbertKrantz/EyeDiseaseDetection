@@ -1,0 +1,6 @@
+{
+    "num_classes": 9,
+    "pretrained": true,
+    "in_channels": 1,
+    "drop_rate": 0.2
+}
