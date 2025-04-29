@@ -12,7 +12,9 @@ from torch.optim import lr_scheduler
 from torch.cuda.amp import GradScaler, autocast
 
 import timm
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, roc_curve, auc
+import matplotlib.pyplot as plt
+from itertools import cycle
 
 class EyeDiseaseClassifier(nn.Module):
     def __init__(self, model_name, num_classes, dropout_rate=0.2, pretrained=True, in_channels=1):
@@ -113,6 +115,8 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler,
     val_losses = []
     train_accs = []
     val_accs = []
+    train_aucs = []
+    val_aucs = []
     
     # For early stopping
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -138,6 +142,9 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler,
             
             running_loss = 0.0
             running_corrects = 0
+            
+            all_labels = []
+            all_probs = []
             
             # Iterate over data
             for inputs, labels in tqdm(dataloaders[phase], desc=phase):
@@ -170,6 +177,11 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler,
                 running_loss += loss.item() * inputs.size(0)
                 _, preds = torch.max(outputs, 1)
                 running_corrects += torch.sum(preds == labels.data)
+                
+                # Store labels and probabilities for ROC-AUC calculation
+                probs = torch.nn.functional.softmax(outputs, dim=1)
+                all_labels.extend(labels.cpu().numpy())
+                all_probs.extend(probs.detach().cpu().numpy())
             
             if phase == 'train' and scheduler is not None:
                 scheduler.step()
@@ -177,15 +189,40 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler,
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
             
+            # Convert to numpy arrays for ROC-AUC calculation
+            all_labels = np.array(all_labels)
+            all_probs = np.array(all_probs)
+            
+            # Calculate ROC-AUC for multi-class (one-vs-rest)
+            n_classes = all_probs.shape[1]
+            
+            # Check if we have more than one class
+            if n_classes > 1:
+                try:
+                    # One-vs-Rest ROC AUC for multiclass
+                    epoch_auc = roc_auc_score(
+                        np.eye(n_classes)[all_labels],  # Convert to one-hot encoding
+                        all_probs,
+                        multi_class='ovr',
+                        average='macro'
+                    )
+                except ValueError:
+                    # Handle case where not all classes are present in this batch/epoch
+                    epoch_auc = 0.0
+            else:
+                epoch_auc = 0.0  # Default if we can't calculate AUC
+            
             # Log metrics
             if phase == 'train':
                 train_losses.append(epoch_loss)
                 train_accs.append(epoch_acc.item())
+                train_aucs.append(epoch_auc)
             else:
                 val_losses.append(epoch_loss)
                 val_accs.append(epoch_acc.item())
+                val_aucs.append(epoch_auc)
             
-            print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+            print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f} AUC: {epoch_auc:.4f}')
             
             # Deep copy the model if best validation accuracy
             if phase == 'val' and epoch_acc > best_acc:
@@ -228,17 +265,79 @@ def train_model(model, dataloaders, criterion, optimizer, scheduler,
         'train_loss': train_losses,
         'val_loss': val_losses,
         'train_acc': train_accs,
-        'val_acc': val_accs
+        'val_acc': val_accs,
+        'train_auc': train_aucs,
+        'val_auc': val_aucs
     }
     
     return model, history
 
 
-def evaluate_model(model, test_loader, device, class_names):
+def plot_roc_curves(y_true, y_score, class_names, save_path=None):
+    """
+    Plot ROC curves for multiclass classification.
+    
+    Args:
+        y_true (array): True labels (one-hot encoded for multiclass)
+        y_score (array): Predicted probabilities
+        class_names (list or dict): List of class names or dictionary mapping indices to class names
+        save_path (str, optional): Path to save the plot. If None, plot is displayed.
+    """
+    # Handle both list and dictionary class_names
+    if isinstance(class_names, dict):
+        # If class_names is a dictionary like {0: 'Class_0', 1: 'Class_1', ...}
+        label_list = [class_names[i] for i in sorted(class_names.keys())]
+        n_classes = len(class_names)
+    else:
+        # If class_names is a list like ['Class_0', 'Class_1', ...]
+        label_list = class_names
+        n_classes = len(class_names)
+    
+    # Compute ROC curve and ROC area for each class
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+    
+    for i in range(n_classes):
+        fpr[i], tpr[i], _ = roc_curve(y_true[:, i], y_score[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
+    
+    # Plot all ROC curves
+    plt.figure(figsize=(10, 8))
+    
+    colors = cycle(['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan'])
+    
+    for i, color in zip(range(n_classes), colors):
+        plt.plot(
+            fpr[i],
+            tpr[i],
+            color=color,
+            lw=2,
+            label=f'{label_list[i]} (AUC = {roc_auc[i]:.2f})'
+        )
+    
+    # Plot diagonal line
+    plt.plot([0, 1], [0, 1], 'k--', lw=2)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic (ROC) Curves')
+    plt.legend(loc="lower right")
+    
+    if save_path:
+        plt.savefig(save_path)
+        plt.close()
+    else:
+        plt.show()
+
+
+def evaluate_model(model, test_loader, device, class_names, save_dir='./model_outputs'):
     model.eval()
     
     all_preds = []
     all_labels = []
+    all_probs = []
     
     with torch.no_grad():
         for inputs, labels in tqdm(test_loader, desc='Evaluating'):
@@ -247,13 +346,16 @@ def evaluate_model(model, test_loader, device, class_names):
             
             outputs = model(inputs)
             _, preds = torch.max(outputs, 1)
+            probs = torch.nn.functional.softmax(outputs, dim=1)
             
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
+            all_probs.extend(probs.detach().cpu().numpy())
     
     # Convert to numpy arrays
     all_preds = np.array(all_preds)
     all_labels = np.array(all_labels)
+    all_probs = np.array(all_probs)
     
     # Print classification report
     print("\nClassification Report:")
@@ -268,11 +370,58 @@ def evaluate_model(model, test_loader, device, class_names):
     accuracy = (all_preds == all_labels).mean()
     print(f"\nTest Accuracy: {accuracy:.4f}")
     
+    # Calculate and print ROC-AUC for multiclass
+    # Handle both list and dictionary class_names
+    if isinstance(class_names, dict):
+        # If class_names is a dictionary like {0: 'Class_0', 1: 'Class_1', ...}
+        label_list = [class_names[i] for i in sorted(class_names.keys())]
+        n_classes = len(class_names)
+        # Make sure we map the numeric labels correctly
+        class_indices = sorted(class_names.keys())
+    else:
+        # If class_names is a list like ['Class_0', 'Class_1', ...]
+        label_list = class_names
+        n_classes = len(class_names)
+        class_indices = list(range(n_classes))
+    
+    # Convert labels to one-hot encoding for ROC-AUC calculation
+    y_true_onehot = np.eye(n_classes)[all_labels]
+    
+    # Calculate ROC-AUC (One-vs-Rest)
+    try:
+        roc_auc_ovr = roc_auc_score(y_true_onehot, all_probs, multi_class='ovr', average='macro')
+        print(f"\nROC-AUC (macro average, one-vs-rest): {roc_auc_ovr:.4f}")
+        
+        # Print per-class AUC scores
+        class_auc_scores = []
+        for i, idx in enumerate(class_indices):
+            auc_i = roc_auc_score(y_true_onehot[:, i], all_probs[:, i])
+            class_auc_scores.append(auc_i)
+            print(f"  - {label_list[i]} AUC: {auc_i:.4f}")
+        
+        # Plot ROC curves
+        os.makedirs(save_dir, exist_ok=True)
+        plot_roc_curves(
+            y_true_onehot, 
+            all_probs, 
+            label_list,  # Use the processed label_list instead of raw class_names
+            save_path=os.path.join(save_dir, 'roc_curves.png')
+        )
+        print(f"\nROC curve plot saved to {os.path.join(save_dir, 'roc_curves.png')}")
+    
+    except ValueError as e:
+        print(f"Could not calculate ROC-AUC: {e}")
+        roc_auc_ovr = 0.0
+        class_auc_scores = [0.0] * n_classes
+    
     return {
         'accuracy': accuracy,
         'predictions': all_preds,
         'labels': all_labels,
-        'confusion_matrix': cm
+        'probabilities': all_probs,
+        'confusion_matrix': cm,
+        'roc_auc_ovr': roc_auc_ovr,
+        'class_auc_scores': class_auc_scores
     }
 
 
@@ -366,7 +515,8 @@ def main():
         model=model,
         test_loader=test_loader,
         device=device,
-        class_names=class_names
+        class_names=class_names,
+        save_dir=args.output_dir
     )
     """
     

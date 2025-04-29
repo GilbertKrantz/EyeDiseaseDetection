@@ -72,7 +72,7 @@ class ModelHandler:
         model.to(self.device)
         return model
     
-    def train_model(self, num_epochs: int = 25, use_amp: bool = False):
+    def train_model(self, num_epochs: int = 25, use_amp: bool = False, save_dir: str = None):
         """
         Train the model using the provided dataloaders and hyperparameters.
         
@@ -94,11 +94,12 @@ class ModelHandler:
             device=self.device,
             num_epochs=num_epochs,
             use_amp= use_amp,
+            save_dir=save_dir
         )
         
         return self.model, self.history
     
-    def test_model(self, class_names: dict = None):
+    def test_model(self, class_names: dict = None, save_dir: str = None):
         """
         Evaluate the model using the test dataloader.
         
@@ -107,9 +108,10 @@ class ModelHandler:
         """
         metrics = evaluate_model(
             model=self.model,
-            dataloader=self.dataloader['test'],
+            test_loader=self.dataloader['test'],
             device=self.device,
-            class_names=class_names
+            class_names=class_names,
+            save_dir=save_dir
         )
         return metrics
     
