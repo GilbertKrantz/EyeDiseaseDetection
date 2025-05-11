@@ -148,7 +148,17 @@ def main():
         gr.Markdown("# Eye Disease Detection System")
         gr.Markdown(
             """This application uses deep learning to detect eye diseases from fundus images.
-                    Currently supports detection of: Cataract, Diabetic Retinopathy, Glaucoma, and Normal eyes."""
+                    Currently supports detection of: 
+                    - Central Serous Chorioretinopathy
+                    - Diabetic Retinopathy
+                    - Disc Edema
+                    - Glaucoma
+                    - Healthy (normal eye)
+                    - Macular Scar
+                    - Myopia
+                    - Retinal Detachment
+                    - Retinitis Pigmentosa
+            """
         )
 
         with gr.Row():
