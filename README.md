@@ -1,3 +1,17 @@
+---
+title: Eye Disease Detection Models
+emoji: 🛕🛕
+colorFrom: green
+colorTo: blue
+sdk: gradio
+sdk_version: 5.29.0
+app_file: gradio_inference.py
+pinned: true
+short_description: Eye disease detection using deep learning models
+license: apache-2.0
+---
+
+
 # Eye Disease Detection 
 
 This repository contains a Gradio web application for eye disease detection using deep learning models. The application allows users to upload fundus images and get predictions for common eye conditions.
