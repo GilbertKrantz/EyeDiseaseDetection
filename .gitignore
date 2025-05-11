@@ -180,3 +180,6 @@ EDA/
 
 # Model Outputs
 model_outputs/
+
+# VS CODE
+.vscode/
