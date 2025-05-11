@@ -5,7 +5,7 @@ colorFrom: green
 colorTo: blue
 sdk: gradio
 sdk_version: 5.29.0
-app_file: gradio_inference.py
+app_file: gradio-inference.py
 pinned: true
 short_description: Eye disease detection using deep learning models
 license: apache-2.0
