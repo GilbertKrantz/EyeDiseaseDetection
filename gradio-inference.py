@@ -4,12 +4,16 @@
 
 import os
 import sys
-import torch
 import numpy as np
+
+import torch
+import torch.nn as nn
+
 import gradio as gr
 from PIL import Image
-from torchvision import transforms
 import logging
+
+from main import get_transform
 
 logging.basicConfig(level=logging.INFO)
 
@@ -35,19 +39,7 @@ CLASSES = [
 ]
 
 
-def get_transform():
-    """Get the standard transformation pipeline for inference."""
-    return transforms.Compose(
-        [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ]
-    )
-
-
-def load_model(model_path, model_type="efficientvit"):
+def load_model(model_path: str, model_type: str = "efficientvit") -> nn.Module:
     """
     Load a pretrained model for inference.
 
@@ -91,7 +83,7 @@ def load_model(model_path, model_type="efficientvit"):
     return model
 
 
-def predict_image(image, model_path, model_type):
+def predict_image(image: np.ndarray, model_path: str, model_type: str) -> dict:
     """
     Predict eye disease from an uploaded image.
 
