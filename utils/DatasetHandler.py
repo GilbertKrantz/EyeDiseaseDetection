@@ -1,32 +1,4 @@
-import os
-import time
-import random
-import copy
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torchvision.transforms as transforms
-from torchvision import transforms, datasets
-import torchvision.models as models
-import timm
-import matplotlib.pyplot as plt
-import seaborn as sns
-from PIL import Image
-from torch.utils.data import DataLoader, random_split, Subset, Dataset
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    classification_report,
-    roc_curve,
-    auc,
-    precision_recall_curve,
-    average_precision_score,
-)
-from sklearn.preprocessing import label_binarize
-from tqdm import tqdm
-import gc
+from torch.utils.data import Dataset
 
 
 # Modified FilteredImageDataset class with Pterygium filtering

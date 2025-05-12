@@ -1,6 +1,10 @@
-from torch.utils.data import DataLoader, Dataset
-from Trainer import model_train
-from Evaluator import ClassificationEvaluator
+import copy
+import torch
+from torch.utils.data import DataLoader
+from utils.Trainer import model_train
+
+from utils.DatasetHandler import FilteredImageDataset
+from utils.Evaluator import ClassificationEvaluator
 
 
 def compare_models(
@@ -8,9 +12,9 @@ def compare_models(
     train_loader: DataLoader,
     val_loader: DataLoader,
     test_loader: DataLoader,
-    dataset: Dataset,
+    dataset: FilteredImageDataset,
     epochs: int = 20,
-    names: list = None,
+    names: list | None = None,
 ) -> None:
     """
     Compare multiple models on validation and test datasets.
@@ -19,9 +23,9 @@ def compare_models(
         train_loader (DataLoader): DataLoader for training data.
         val_loader (DataLoader): DataLoader for validation data.
         test_loader (DataLoader): DataLoader for test data.
-        dataset (Dataset): Dataset object containing class names.
+        dataset (FilteredImageDataset): Dataset object containing class names.
         epochs (int): Number of epochs for training.
-        names (list): List of model names. If None, default names will be used.
+        names (list | None): List of model names. If None, default names will be used.
     """
     if names is None:
         names = [f"Model {i+1}" for i in range(len(models))]
@@ -42,7 +46,6 @@ def compare_models(
 
     for i, (model, name) in enumerate(zip(models, names)):
         evaluator = ClassificationEvaluator(
-            num_classes=len(dataset.classes),
             class_names=dataset.classes,
         )
 
@@ -103,7 +106,7 @@ def compare_models(
                 test_kappa_summary[name] = None
 
             # Track best model
-            if test_accuracy > best_accuracy:
+            if test_accuracy is not None and test_accuracy > best_accuracy:
                 best_accuracy = test_accuracy
                 best_model_obj = copy.deepcopy(model)
                 best_model_name = name

@@ -43,9 +43,9 @@ class EyeDetectionModels(object):
         """
         for attr in ("features", "blocks", "layers", "stem"):  # common container names
             if hasattr(model, attr):
-                return getattr(model, attr)
+                return nn.ModuleList(getattr(model, attr))
         # fallback: collect all children except classifier/head
-        return list(model.children())[:-1]
+        return nn.ModuleList(model.children())[:-1]
 
     @staticmethod
     def _freeze_except_last_n(blocks: nn.ModuleList, n: int) -> None:

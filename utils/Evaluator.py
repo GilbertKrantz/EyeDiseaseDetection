@@ -77,7 +77,9 @@ class ClassificationEvaluator:
         results = self.compute_metrics(all_labels, all_preds, all_scores)
         return results
 
-    def compute_metrics(self, y_true, y_pred, y_scores, model_name: str = "") -> dict:
+    def compute_metrics(
+        self, y_true, y_pred, y_scores, model_name: str | torch.Tensor = ""
+    ) -> dict:
         """
         Compute comprehensive classification metrics.
 

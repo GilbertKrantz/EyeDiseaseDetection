@@ -3,19 +3,19 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 import gc
 
-from Evaluator import ClassificationEvaluator
-from Callback import EarlyStopping
+from utils.Evaluator import ClassificationEvaluator
+from utils.Callback import EarlyStopping
 
 
 def train_model(
     model: nn.Module,
     criterion: nn.Module,
     optimizer: optim.Optimizer,
-    scheduler: optim.lr_scheduler._LRScheduler,
+    scheduler,
     train_loader: DataLoader,
     val_loader: DataLoader,
     early_stopping: EarlyStopping,
@@ -104,8 +104,14 @@ def train_model(
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-        epoch_train_loss = running_loss / len(train_loader.dataset)
-        epoch_train_acc = correct / total
+        if total == 0:
+            print("Warning: No training samples found. Skipping training.")
+            epoch_train_loss = 0.0
+            epoch_train_acc = 0.0
+        else:
+            epoch_train_loss = running_loss / total
+            epoch_train_acc = correct / total
+
         train_losses.append(epoch_train_loss)
         train_accs.append(epoch_train_acc)
 
@@ -135,8 +141,15 @@ def train_model(
                 all_preds.extend(predicted.cpu().numpy().tolist())
                 all_scores.append(probs.cpu().numpy())
 
-        epoch_val_loss = running_loss / len(val_loader.dataset)
-        epoch_val_acc = correct / total
+        #  Mitigate DivideByZeroError
+        if total == 0:
+            print("Warning: No validation samples found. Skipping validation.")
+            epoch_val_loss = 0.0
+            epoch_val_acc = 0.0
+        else:
+            epoch_val_loss = running_loss / total
+            epoch_val_acc = correct / total
+
         val_losses.append(epoch_val_loss)
         val_accs.append(epoch_val_acc)
 
@@ -185,9 +198,9 @@ def model_train(
     model: nn.Module,
     train_loader: DataLoader,
     val_loader: DataLoader,
-    dataset: Dataset,
+    dataset,
     epochs: int = 20,
-) -> tuple:
+) -> dict:
     model_name = type(model).__name__
     if hasattr(model, "pretrained_cfg") and "name" in model.pretrained_cfg:
         model_name = model.pretrained_cfg["name"]
@@ -228,7 +241,6 @@ def model_train(
 
         print(f"\n{'='*20} Evaluation for {model_name} {'='*20}\n")
         evaluator = ClassificationEvaluator(
-            num_classes=num_classes,
             class_names=class_names,
         )
 
