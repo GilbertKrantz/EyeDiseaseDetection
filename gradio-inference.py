@@ -3,8 +3,8 @@
 # Date: May 11, 2025
 
 import os
-import sys
 import numpy as np
+import traceback
 
 import torch
 import torch.nn as nn
@@ -123,8 +123,6 @@ def predict_image(image: np.ndarray, model_path: str, model_type: str) -> dict:
         return {cls: float(prob) for cls, prob in zip(CLASSES, probabilities)}
 
     except Exception as e:
-        import traceback
-
         traceback.print_exc()
         return {cls: 0.0 for cls in CLASSES}
 
