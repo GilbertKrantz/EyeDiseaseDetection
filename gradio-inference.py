@@ -18,8 +18,7 @@ from main import get_transform
 logging.basicConfig(level=logging.INFO)
 
 # Import custom modules
-sys.path.append("./utils")
-from ModelCreator import EyeDetectionModels
+from utils.ModelCreator import EyeDetectionModels
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -39,7 +38,7 @@ CLASSES = [
 ]
 
 
-def load_model(model_path: str, model_type: str = "efficientvit") -> nn.Module:
+def load_model(model_path: str | None, model_type: str = "efficientvit") -> nn.Module:
     """
     Load a pretrained model for inference.
 
