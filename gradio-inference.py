@@ -38,7 +38,7 @@ CLASSES = [
 ]
 
 
-def load_model(model_path: str | None, model_type: str = "efficientvit") -> nn.Module:
+def load_model(model_type: str = "efficientvit") -> nn.Module:
     """
     Load a pretrained model for inference.
 
@@ -66,26 +66,22 @@ def load_model(model_path: str | None, model_type: str = "efficientvit") -> nn.M
     model = model_creator.models[model_type]()
 
     # Load state dict if provided
-    if model_path and not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model path '{model_path}' does not exist.")
-    elif model_path is None:
-        #  Use default model path if it exists
-        if os.path.exists(f"./weights/{model_type}.pth"):
-            model_path = f"./weights/{model_type}.pth"
-            logging.info(f"Loading model from default path: ./weights/{model_type}.pth")
-            model.load_state_dict(torch.load(model_path, map_location=device))
-            logging.info("Model loaded successfully.")
-        else:
-            model_path = None
-            logging.warning(
-                f"Default model path '{model_path}' not found. Using untrained model."
-            )
+    if os.path.exists(f"./weights/{model_type}.pth"):
+        model_path = f"./weights/{model_type}.pth"
+        logging.info(f"Loading model from default path: ./weights/{model_type}.pth")
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        logging.info("Model loaded successfully.")
+    else:
+        model_path = None
+        logging.warning(
+            f"Default model path '{model_path}' not found. Using untrained model."
+        )
     # Set model to evaluation mode
     model.eval()
     return model
 
 
-def predict_image(image: np.ndarray, model_path: str, model_type: str) -> dict:
+def predict_image(image: np.ndarray, model_type: str) -> dict:
     """
     Predict eye disease from an uploaded image.
 
@@ -101,7 +97,7 @@ def predict_image(image: np.ndarray, model_path: str, model_type: str) -> dict:
 
         logging.info("Starting prediction...")
         # Load model
-        model = load_model(model_path, model_type)
+        model = load_model(model_type)
 
         # Preprocess image
         logging.info("Preprocessing image...")
@@ -156,11 +152,6 @@ def main():
         with gr.Row():
             with gr.Column():
                 input_image = gr.Image(label="Upload Fundus Image", type="numpy")
-                model_path = gr.Textbox(
-                    label="Model Path (leave empty to use default)",
-                    placeholder="Path to model .pth file",
-                    value="",
-                )
                 model_type = gr.Dropdown(
                     label="Model Architecture", choices=model_types, value="mobilenetv4"
                 )
@@ -172,7 +163,7 @@ def main():
         # Process the image when the button is clicked
         submit_btn.click(
             fn=predict_image,
-            inputs=[input_image, model_path, model_type],
+            inputs=[input_image, model_type],
             outputs=output_chart,
         )
 
