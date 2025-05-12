@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
 from torchvision import transforms, datasets
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, Dataset
 
 # Import custom modules
 sys.path.append("./utils")
@@ -23,7 +23,7 @@ from Trainer import model_train
 
 
 # Set random seeds for reproducibility
-def set_seed(seed=42):
+def set_seed(seed=42) -> None:
     """Set seeds for reproducibility."""
     random.seed(seed)
     np.random.seed(seed)
@@ -35,7 +35,7 @@ def set_seed(seed=42):
         torch.backends.cudnn.benchmark = False
 
 
-def get_transform():
+def get_transform() -> transforms.Compose:
     """
     Get standard data transform for both training and validation/testing.
 
@@ -55,7 +55,7 @@ def get_transform():
     return transform
 
 
-def load_data(args):
+def load_data(args) -> tuple:
     """
     Load and prepare datasets from separate directories for training and evaluation.
 
@@ -135,7 +135,13 @@ def load_data(args):
     return train_loader, val_loader, test_loader, eval_dataset
 
 
-def train_single_model(args, train_loader, val_loader, test_loader, dataset):
+def train_single_model(
+    args,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    test_loader: DataLoader,
+    dataset: Dataset,
+) -> None:
     """Train a single model specified by the arguments."""
 
     print(f"Creating {args.model} model...")
@@ -177,7 +183,13 @@ def train_single_model(args, train_loader, val_loader, test_loader, dataset):
         print("Training failed. Cannot evaluate on test set.")
 
 
-def compare_multiple_models(args, train_loader, val_loader, test_loader, dataset):
+def compare_multiple_models(
+    args,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    test_loader: DataLoader,
+    dataset: Dataset,
+) -> None:
     """Compare multiple models."""
 
     print("Preparing to compare multiple models...")
@@ -217,7 +229,7 @@ def compare_multiple_models(args, train_loader, val_loader, test_loader, dataset
     )
 
 
-def main():
+def main() -> None:
     """Main function to run the eye disease detection application."""
 
     # Set up argument parser with example usage

@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 import gc
 
@@ -11,16 +12,16 @@ from Callback import EarlyStopping
 
 
 def train_model(
-    model,
-    criterion,
-    optimizer,
-    scheduler,
-    train_loader,
-    val_loader,
-    early_stopping,
-    epochs=15,
-    use_ddp=False,
-):
+    model: nn.Module,
+    criterion: nn.Module,
+    optimizer: optim.Optimizer,
+    scheduler: optim.lr_scheduler._LRScheduler,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    early_stopping: EarlyStopping,
+    epochs: int = 15,
+    use_ddp: bool = False,
+) -> tuple:
     """
     Train the model and perform validation using multiple GPUs.
     Supports both DataParallel (DP) and DistributedDataParallel (DDP) modes.
@@ -180,7 +181,13 @@ def train_model(
     )
 
 
-def model_train(model, train_loader, val_loader, dataset, epochs=20):
+def model_train(
+    model: nn.Module,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    dataset: Dataset,
+    epochs: int = 20,
+) -> tuple:
     model_name = type(model).__name__
     if hasattr(model, "pretrained_cfg") and "name" in model.pretrained_cfg:
         model_name = model.pretrained_cfg["name"]

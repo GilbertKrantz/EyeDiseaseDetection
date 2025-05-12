@@ -1,10 +1,28 @@
+from torch.utils.data import DataLoader, Dataset
 from Trainer import model_train
 from Evaluator import ClassificationEvaluator
 
 
 def compare_models(
-    models, train_loader, val_loader, test_loader, dataset, epochs=20, names=None
-):
+    models: list,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    test_loader: DataLoader,
+    dataset: Dataset,
+    epochs: int = 20,
+    names: list = None,
+) -> None:
+    """
+    Compare multiple models on validation and test datasets.
+    Args:
+        models (list): List of models to compare.
+        train_loader (DataLoader): DataLoader for training data.
+        val_loader (DataLoader): DataLoader for validation data.
+        test_loader (DataLoader): DataLoader for test data.
+        dataset (Dataset): Dataset object containing class names.
+        epochs (int): Number of epochs for training.
+        names (list): List of model names. If None, default names will be used.
+    """
     if names is None:
         names = [f"Model {i+1}" for i in range(len(models))]
 

@@ -1,13 +1,23 @@
 import torch
+from torch import device
 import torch.nn as nn
 import timm
 
 # Set device
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class EyeDetectionModels:
-    def __init__(self, num_classes, freeze_layers=True, device=DEVICE):
+class EyeDetectionModels(object):
+    """
+    A class to create and configure various deep learning models for eye detection tasks.
+    """
+
+    def __init__(
+        self,
+        num_classes: int,
+        freeze_layers: bool = True,
+        device: device = DEVICE,
+    ):
         """
         Initialize the EyeDetectionModels class.
         This class provides methods to create and configure various deep learning models for eye detection.
@@ -26,7 +36,7 @@ class EyeDetectionModels:
 
     # Model architecture functions
     @staticmethod
-    def _get_feature_blocks(model):
+    def _get_feature_blocks(model: nn.Module) -> nn.ModuleList:
         """
         Utility: locate the main feature blocks container in a timm model.
         Returns a list-like module of blocks.
@@ -38,14 +48,14 @@ class EyeDetectionModels:
         return list(model.children())[:-1]
 
     @staticmethod
-    def _freeze_except_last_n(blocks, n):
+    def _freeze_except_last_n(blocks: nn.ModuleList, n: int) -> None:
         total = len(blocks)
         for idx, block in enumerate(blocks):
             requires = idx >= total - n
             for p in block.parameters():
                 p.requires_grad = requires
 
-    def get_model_mobilenetv4(self):
+    def get_model_mobilenetv4(self) -> nn.Module:
         model = timm.create_model(
             "mobilenetv4_conv_medium.e500_r256_in1k", pretrained=True
         )
@@ -62,14 +72,12 @@ class EyeDetectionModels:
         )
         return model.to(self.device)
 
-    def get_model_levit(self):
+    def get_model_levit(self) -> nn.Module:
         model = timm.create_model("levit_128s.fb_dist_in1k", pretrained=True)
         if self.freeze_layers:
             blocks = self._get_feature_blocks(model)
             self._freeze_except_last_n(blocks, 2)
         # Attempt to extract in_features from model.head or classifier
-        head = getattr(model, "head_dist", None) or getattr(model, "classifier", None)
-        linear = getattr(head, "linear")
         in_features = 384
         model.head = nn.Sequential(
             nn.Linear(in_features, 512),
@@ -85,15 +93,12 @@ class EyeDetectionModels:
         )
         return model.to(self.device)
 
-    def get_model_efficientvit(self):
+    def get_model_efficientvit(self) -> nn.Module:
         model = timm.create_model("efficientvit_m1.r224_in1k", pretrained=True)
         if self.freeze_layers:
             blocks = self._get_feature_blocks(model)
             self._freeze_except_last_n(blocks, 2)
         # handle different head naming
-        head = getattr(model, "head", None)
-        print(head)
-        linear = getattr(head, "linear")
         in_features = 192
         model.head.linear = nn.Sequential(
             nn.Linear(in_features, 512),
@@ -103,7 +108,7 @@ class EyeDetectionModels:
         )
         return model.to(self.device)
 
-    def get_model_gernet(self):
+    def get_model_gernet(self) -> nn.Module:
         """
         Load and configure a GENet (General and Efficient Network) model with customizable classifier.
 
@@ -142,7 +147,7 @@ class EyeDetectionModels:
         )
         return model.to(self.device)
 
-    def get_model_regnetx(self):
+    def get_model_regnetx(self) -> nn.Module:
         """
         Load and configure a RegNetX model with customizable classifier.
 

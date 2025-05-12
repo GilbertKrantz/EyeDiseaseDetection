@@ -1,4 +1,6 @@
 import numpy as np
+import torch.nn as nn
+from torch.utils.data import DataLoader
 import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -23,7 +25,7 @@ class ClassificationEvaluator:
     and generate visualizations for model evaluation.
     """
 
-    def __init__(self, class_names):
+    def __init__(self, class_names: list):
         """
         Initialize the evaluator with class names.
 
@@ -39,7 +41,7 @@ class ClassificationEvaluator:
             return data.cpu().numpy()
         return np.array(data)
 
-    def evaluate_model(self, model, test_loader):
+    def evaluate_model(self, model: nn.Module, test_loader: DataLoader) -> dict:
         """
         Evaluate a trained model on test dataset.
 
@@ -75,7 +77,7 @@ class ClassificationEvaluator:
         results = self.compute_metrics(all_labels, all_preds, all_scores)
         return results
 
-    def compute_metrics(self, y_true, y_pred, y_scores, model_name=""):
+    def compute_metrics(self, y_true, y_pred, y_scores, model_name: str = "") -> dict:
         """
         Compute comprehensive classification metrics.
 
@@ -135,7 +137,7 @@ class ClassificationEvaluator:
             "kappa": kappa,
         }
 
-    def plot_roc_curves(self, y_true, y_scores):
+    def plot_roc_curves(self, y_true, y_scores) -> dict:
         """
         Plot ROC curves for multi-class classification.
 
@@ -197,7 +199,7 @@ class ClassificationEvaluator:
 
         return roc_auc
 
-    def plot_pr_curves(self, y_true, y_scores):
+    def plot_pr_curves(self, y_true, y_scores) -> dict:
         """
         Plot Precision-Recall curves for multi-class classification.
 
@@ -263,7 +265,7 @@ class ClassificationEvaluator:
 
         return avg_precision
 
-    def plot_confusion_matrix(self, y_true, y_pred):
+    def plot_confusion_matrix(self, y_true, y_pred) -> None:
         """
         Plot confusion matrix.
 
@@ -296,7 +298,7 @@ class ClassificationEvaluator:
         plt.tight_layout()
         plt.show()
 
-    def plot_per_class_accuracy(self, y_true, y_pred):
+    def plot_per_class_accuracy(self, y_true, y_pred) -> np.ndarray:
         """
         Plot per-class accuracy.
 
@@ -328,7 +330,9 @@ class ClassificationEvaluator:
 
         return per_class_accuracy
 
-    def plot_training_history(self, train_losses, val_losses, train_accs, val_accs):
+    def plot_training_history(
+        self, train_losses, val_losses, train_accs, val_accs
+    ) -> None:
         """
         Plot accuracy and loss curves from training history.
 
