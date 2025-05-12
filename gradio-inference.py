@@ -72,6 +72,9 @@ def load_model(model_path: str | None, model_type: str = "efficientvit") -> nn.M
         #  Use default model path if it exists
         if os.path.exists(f"./weights/{model_type}.pth"):
             model_path = f"./weights/{model_type}.pth"
+            logging.info(f"Loading model from default path: ./weights/{model_type}.pth")
+            model.load_state_dict(torch.load(model_path, map_location=device))
+            logging.info("Model loaded successfully.")
         else:
             model_path = None
             logging.warning(
