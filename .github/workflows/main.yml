@@ -16,4 +16,6 @@ jobs:
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push https://GilbertKrantz:$HF_TOKEN@huggingface.co/spaces/GilbertKrantz/EyeDiseaseDetection main
+        run: |
+          git pull https://GilbertKrantz:$HF_TOKEN@huggingface.co/spaces/GilbertKrantz/EyeDiseaseDetection main 
+          git push https://GilbertKrantz:$HF_TOKEN@huggingface.co/spaces/GilbertKrantz/EyeDiseaseDetection main
