@@ -1,1 +1,2 @@
 weights/efficientvit.pth filter=lfs diff=lfs merge=lfs -text
+efficientvit.pth filter=lfs diff=lfs merge=lfs -text
