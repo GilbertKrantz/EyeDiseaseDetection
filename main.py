@@ -2,24 +2,22 @@
 # Eye Disease Detection - Main Application
 # Date: May 11, 2025
 
-import os
 import sys
 import argparse
 import random
 import numpy as np
 import torch
-import torch.nn as nn
-import matplotlib.pyplot as plt
-from torchvision import transforms, datasets
+from torchvision.datasets import ImageFolder
+from torchvision.transforms import Compose
+from torchvision.transforms import Resize, CenterCrop, ToTensor, Normalize
 from torch.utils.data import DataLoader, random_split, Dataset
 
 # Import custom modules
-sys.path.append("./utils")
-from ModelCreator import EyeDetectionModels
-from DatasetHandler import FilteredImageDataset
-from Evaluator import ClassificationEvaluator
-from Comparator import compare_models
-from Trainer import model_train
+from utils.ModelCreator import EyeDetectionModels
+from utils.DatasetHandler import FilteredImageDataset
+from utils.Evaluator import ClassificationEvaluator
+from utils.Comparator import compare_models
+from utils.Trainer import model_train
 
 
 # Set random seeds for reproducibility
@@ -35,7 +33,7 @@ def set_seed(seed=42) -> None:
         torch.backends.cudnn.benchmark = False
 
 
-def get_transform() -> transforms.Compose:
+def get_transform() -> Compose:
     """
     Get standard data transform for both training and validation/testing.
 
@@ -43,19 +41,21 @@ def get_transform() -> transforms.Compose:
         transform: Standard transform for all datasets
     """
     # Standard transform as specified
-    transform = transforms.Compose(
+    transform = Compose(
         [
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            Resize(256),
+            CenterCrop(224),
+            ToTensor(),
+            Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ]
     )
 
     return transform
 
 
-def load_data(args) -> tuple:
+def load_data(
+    args,
+) -> tuple[DataLoader, DataLoader, DataLoader, FilteredImageDataset]:
     """
     Load and prepare datasets from separate directories for training and evaluation.
 
@@ -75,12 +75,12 @@ def load_data(args) -> tuple:
     transform = get_transform()
 
     # Load training dataset
-    train_dataset = datasets.ImageFolder(args.train_dir, transform=transform)
+    train_dataset = ImageFolder(args.train_dir, transform=transform)
     print(f"Training dataset classes: {train_dataset.classes}")
     print(f"Training dataset size: {len(train_dataset)}")
 
     # Load evaluation dataset
-    eval_dataset = datasets.ImageFolder(args.eval_dir, transform=transform)
+    eval_dataset = ImageFolder(args.eval_dir, transform=transform)
     print(f"Evaluation dataset classes: {eval_dataset.classes}")
 
     # Apply class filtering if requested
@@ -89,6 +89,10 @@ def load_data(args) -> tuple:
         train_dataset = FilteredImageDataset(train_dataset, excluded_classes)
         eval_dataset = FilteredImageDataset(eval_dataset, excluded_classes)
         print(f"After filtering - Classes: {eval_dataset.classes}")
+    else:
+        train_dataset = FilteredImageDataset(train_dataset)
+        eval_dataset = FilteredImageDataset(eval_dataset)
+        print("No classes excluded.")
 
     print(f"After filtering - Train size: {len(train_dataset)}")
     print(f"After filtering - Eval size: {len(eval_dataset)}")
@@ -140,7 +144,7 @@ def train_single_model(
     train_loader: DataLoader,
     val_loader: DataLoader,
     test_loader: DataLoader,
-    dataset: Dataset,
+    dataset: FilteredImageDataset,
 ) -> None:
     """Train a single model specified by the arguments."""
 
@@ -188,7 +192,7 @@ def compare_multiple_models(
     train_loader: DataLoader,
     val_loader: DataLoader,
     test_loader: DataLoader,
-    dataset: Dataset,
+    dataset: FilteredImageDataset,
 ) -> None:
     """Compare multiple models."""
 
