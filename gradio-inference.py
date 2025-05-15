@@ -4,7 +4,6 @@
 
 import os
 import numpy as np
-import traceback
 
 import torch
 import torch.nn as nn
@@ -122,7 +121,7 @@ def predict_image(image: np.ndarray, model_type: str) -> dict:
         return {cls: float(prob) for cls, prob in zip(CLASSES, probabilities)}
 
     except Exception as e:
-        traceback.print_exc()
+        logging.error(f"Error during prediction: {e}")
         return {cls: 0.0 for cls in CLASSES}
 
 

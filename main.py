@@ -10,7 +10,7 @@ import torch
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import Compose
 from torchvision.transforms import Resize, CenterCrop, ToTensor, Normalize
-from torch.utils.data import DataLoader, random_split, Dataset
+from torch.utils.data import DataLoader, random_split
 
 # Import custom modules
 from utils.ModelCreator import EyeDetectionModels
