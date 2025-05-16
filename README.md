@@ -14,7 +14,7 @@ license: apache-2.0
 
 # Eye Disease Detection 
 
-This repository contains a Gradio web application for eye disease detection using deep learning models. The application allows users to upload fundus images and get predictions for common eye conditions.
+This repository contains a Gradio web application for eye disease detection using deep learning models. The application allows users to upload fundus photographs and get predictions for common eye conditions.
 
 ## Features
 
