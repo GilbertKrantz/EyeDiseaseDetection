@@ -1,3 +1,6 @@
 weights/efficientvit.pth filter=lfs diff=lfs merge=lfs -text
-efficientvit.pth filter=lfs diff=lfs merge=lfs -text
+weights/gernet.pth filter=lfs diff=lfs merge=lfs -text
+weights/levit.pth filter=lfs diff=lfs merge=lfs -text
+weights/mobilenetv4.pth filter=lfs diff=lfs merge=lfs -text
+weights/regnetx.pth filter=lfs diff=lfs merge=lfs -text
 weights/*.pth filter=lfs diff=lfs merge=lfs -text
