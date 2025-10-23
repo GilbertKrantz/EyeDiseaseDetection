@@ -14,6 +14,9 @@ import gradio as gr
 from PIL import Image
 import logging
 
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.image import show_cam_on_image
+
 from main import get_transform
 
 logging.basicConfig(level=logging.INFO)
@@ -82,118 +85,41 @@ def load_model(model_type: str = "efficientvit") -> nn.Module:
     return model
 
 
-class GradCAM:
+def get_target_layers(model, model_type):
     """
-    GradCAM (Gradient-weighted Class Activation Mapping) implementation
-    for generating attention map heatmaps.
-    """
-    
-    def __init__(self, model, target_layer):
-        """
-        Initialize GradCAM.
-        
-        Args:
-            model: The model to generate CAM for
-            target_layer: The layer to compute gradients from
-        """
-        self.model = model
-        self.target_layer = target_layer
-        self.gradients = None
-        self.activations = None
-        
-        # Register hooks
-        target_layer.register_forward_hook(self.save_activation)
-        target_layer.register_full_backward_hook(self.save_gradient)
-    
-    def save_activation(self, module, input, output):
-        """Hook to save forward pass activations."""
-        self.activations = output.detach()
-    
-    def save_gradient(self, module, grad_input, grad_output):
-        """Hook to save backward pass gradients."""
-        self.gradients = grad_output[0].detach()
-    
-    def generate_cam(self, input_tensor, target_class=None):
-        """
-        Generate Class Activation Map.
-        
-        Args:
-            input_tensor: Input image tensor
-            target_class: Target class index (if None, uses predicted class)
-            
-        Returns:
-            cam: Class activation map
-            prediction: Model prediction
-        """
-        # Forward pass
-        self.model.eval()
-        output = self.model(input_tensor)
-        
-        if target_class is None:
-            target_class = output.argmax(dim=1).item()
-        
-        # Backward pass
-        self.model.zero_grad()
-        class_loss = output[0, target_class]
-        class_loss.backward()
-        
-        # Generate CAM
-        gradients = self.gradients.cpu().numpy()[0]
-        activations = self.activations.cpu().numpy()[0]
-        
-        # Global average pooling of gradients
-        weights = np.mean(gradients, axis=(1, 2))
-        
-        # Weighted combination of activation maps
-        cam = np.zeros(activations.shape[1:], dtype=np.float32)
-        for i, w in enumerate(weights):
-            cam += w * activations[i]
-        
-        # Apply ReLU
-        cam = np.maximum(cam, 0)
-        
-        # Normalize
-        if cam.max() > 0:
-            cam = cam / cam.max()
-        
-        return cam, output
-
-
-def get_target_layer(model, model_type):
-    """
-    Get the target layer for GradCAM based on model type.
+    Get the target layers for GradCAM based on model type.
     
     Args:
         model: The model
         model_type: Type of model
         
     Returns:
-        target_layer: The layer to use for GradCAM
+        target_layers: List of layers to use for GradCAM
     """
     try:
         if model_type == "mobilenetv4":
             # For MobileNetV4, use the last convolutional layer in features
-            return model.features[-1]
+            return [model.features[-1]]
         elif model_type == "levit":
             # For LeViT (transformer), use the last block
-            return model.blocks[-1]
+            return [model.blocks[-1]]
         elif model_type == "efficientvit":
             # For EfficientViT, use the last stage
-            return model.stages[-1]
+            return [model.stages[-1]]
         elif model_type == "gernet":
             # For GENet, use the last stage
-            return model.stages[-1]
+            return [model.stages[-1]]
         elif model_type == "regnetx":
             # For RegNetX, use the last trunk layer
-            return model.trunk[-1]
+            return [model.trunk[-1]]
         else:
             # Default: try to get the last feature layer
             if hasattr(model, 'features'):
-                return model.features[-1]
+                return [model.features[-1]]
             elif hasattr(model, 'stages'):
-                return model.stages[-1]
+                return [model.stages[-1]]
             elif hasattr(model, 'blocks'):
-                return model.blocks[-1]
+                return [model.blocks[-1]]
             else:
                 raise ValueError(f"Cannot determine target layer for model type: {model_type}")
     except Exception as e:
@@ -201,18 +127,18 @@ def get_target_layer(model, model_type):
         # Fallback: try to get any reasonable last conv layer
         for module in reversed(list(model.modules())):
             if isinstance(module, nn.Conv2d):
-                return module
+                return [module]
         raise ValueError("Could not find suitable target layer for GradCAM")
 
 
-def apply_heatmap_on_image(img, cam, alpha=0.5):
+def apply_heatmap_on_image(img, cam, alpha=0.4):
     """
     Apply CAM heatmap overlay on the original image.
     
     Args:
         img: Original image (PIL Image or numpy array)
-        cam: Class activation map
-        alpha: Overlay transparency
+        cam: Class activation map (grayscale, values 0-1)
+        alpha: Overlay transparency (not used with show_cam_on_image, kept for compatibility)
         
     Returns:
         Heatmap overlay image as numpy array
@@ -221,16 +147,16 @@ def apply_heatmap_on_image(img, cam, alpha=0.5):
     if isinstance(img, Image.Image):
         img = np.array(img)
     
+    # Normalize image to 0-1 range for show_cam_on_image
+    img_float = img.astype(np.float32) / 255.0
+    
     # Resize CAM to match image size
     h, w = img.shape[:2]
     cam_resized = cv2.resize(cam, (w, h))
     
-    # Convert CAM to heatmap
-    heatmap = cv2.applyColorMap(np.uint8(255 * cam_resized), cv2.COLORMAP_JET)
-    heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-    
-    # Overlay heatmap on original image
-    overlay = cv2.addWeighted(img, 1 - alpha, heatmap, alpha, 0)
+    # Use pytorch_grad_cam utility to overlay
+    # This function expects img in 0-1 range and cam in 0-1 range
+    overlay = show_cam_on_image(img_float, cam_resized, use_rgb=True)
     
     return overlay
 
@@ -267,22 +193,34 @@ def predict_image(image: np.ndarray, model_type: str) -> tuple[dict, np.ndarray]
         img_tensor = transform(img_pil).unsqueeze(0).to(device)
         logging.info("Image preprocessed successfully.")
 
-        # Get target layer for GradCAM
+        # Get target layers for GradCAM
         try:
-            target_layer = get_target_layer(model, model_type)
-            logging.info(f"Using target layer: {target_layer}")
+            target_layers = get_target_layers(model, model_type)
+            logging.info(f"Using target layers: {target_layers}")
             
-            # Initialize GradCAM
-            grad_cam = GradCAM(model, target_layer)
+            # Initialize GradCAM from pytorch_grad_cam library
+            cam_extractor = GradCAM(model=model, target_layers=target_layers)
             
-            # Generate CAM and prediction
-            cam, outputs = grad_cam.generate_cam(img_tensor)
+            # Generate CAM - the library handles forward and backward passes
+            grayscale_cam = cam_extractor(input_tensor=img_tensor, targets=None)
+            
+            # Get the CAM for the first image in batch
+            cam = grayscale_cam[0, :]
+            
+            # Get model prediction
+            with torch.no_grad():
+                outputs = model(img_tensor)
             
             # Generate heatmap overlay
-            heatmap_overlay = apply_heatmap_on_image(img_pil, cam, alpha=0.4)
+            heatmap_overlay = apply_heatmap_on_image(img_pil, cam)
+            
+            # Clean up
+            del cam_extractor
             
         except Exception as e:
             logging.error(f"Error generating heatmap: {e}")
+            import traceback
+            traceback.print_exc()
             # Fallback: just do prediction without heatmap
             with torch.no_grad():
                 outputs = model(img_tensor)
