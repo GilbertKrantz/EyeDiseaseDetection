@@ -22,6 +22,7 @@ This repository contains a Gradio web application for eye disease detection usin
 - Support for **multiple model architectures** (MobileNetV4, LeViT, EfficientViT, GENet, RegNetX)
 - **Custom model loading** from saved model checkpoints
 - **Visualization** of prediction probabilities
+- **Attention heatmap visualization** using GradCAM to show which regions the model focuses on
 - **Dockerized deployment** option
 
 ## Supported Eye Conditions
@@ -85,7 +86,21 @@ The system can detect the following eye conditions:
 2. (Optional) Specify the path to your trained model file (.pth)
 3. Select the model architecture (MobileNetV4, LeViT, EfficientViT, GENet, RegNetX)
 4. Click "Analyze Image" to get the prediction
-5. View the results and probability distribution
+5. View the results including:
+   - Probability distribution across all disease classes
+   - Attention heatmap showing which regions the model focused on for its prediction
+
+### Understanding the Attention Heatmap
+
+The attention heatmap is generated using GradCAM (Gradient-weighted Class Activation Mapping), which visualizes the regions of the fundus image that the model considers most important for making its prediction:
+
+- **Red/Yellow areas**: Regions the model focuses on most strongly
+- **Blue/Green areas**: Regions with less influence on the prediction
+
+This visualization helps in:
+- Understanding the model's decision-making process
+- Validating that the model is looking at clinically relevant features
+- Building trust in the AI's predictions by making them interpretable
 
 ## Model Training
 
