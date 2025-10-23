@@ -4,9 +4,11 @@
 
 import os
 import numpy as np
+import cv2
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import gradio as gr
 from PIL import Image
@@ -80,49 +82,226 @@ def load_model(model_type: str = "efficientvit") -> nn.Module:
     return model
 
 
-def predict_image(image: np.ndarray, model_type: str) -> dict:
+class GradCAM:
     """
-    Predict eye disease from an uploaded image.
+    GradCAM (Gradient-weighted Class Activation Mapping) implementation
+    for generating attention map heatmaps.
+    """
+    
+    def __init__(self, model, target_layer):
+        """
+        Initialize GradCAM.
+        
+        Args:
+            model: The model to generate CAM for
+            target_layer: The layer to compute gradients from
+        """
+        self.model = model
+        self.target_layer = target_layer
+        self.gradients = None
+        self.activations = None
+        
+        # Register hooks
+        target_layer.register_forward_hook(self.save_activation)
+        target_layer.register_full_backward_hook(self.save_gradient)
+    
+    def save_activation(self, module, input, output):
+        """Hook to save forward pass activations."""
+        self.activations = output.detach()
+    
+    def save_gradient(self, module, grad_input, grad_output):
+        """Hook to save backward pass gradients."""
+        self.gradients = grad_output[0].detach()
+    
+    def generate_cam(self, input_tensor, target_class=None):
+        """
+        Generate Class Activation Map.
+        
+        Args:
+            input_tensor: Input image tensor
+            target_class: Target class index (if None, uses predicted class)
+            
+        Returns:
+            cam: Class activation map
+            prediction: Model prediction
+        """
+        # Forward pass
+        self.model.eval()
+        output = self.model(input_tensor)
+        
+        if target_class is None:
+            target_class = output.argmax(dim=1).item()
+        
+        # Backward pass
+        self.model.zero_grad()
+        class_loss = output[0, target_class]
+        class_loss.backward()
+        
+        # Generate CAM
+        gradients = self.gradients.cpu().numpy()[0]
+        activations = self.activations.cpu().numpy()[0]
+        
+        # Global average pooling of gradients
+        weights = np.mean(gradients, axis=(1, 2))
+        
+        # Weighted combination of activation maps
+        cam = np.zeros(activations.shape[1:], dtype=np.float32)
+        for i, w in enumerate(weights):
+            cam += w * activations[i]
+        
+        # Apply ReLU
+        cam = np.maximum(cam, 0)
+        
+        # Normalize
+        if cam.max() > 0:
+            cam = cam / cam.max()
+        
+        return cam, output
+
+
+def get_target_layer(model, model_type):
+    """
+    Get the target layer for GradCAM based on model type.
+    
+    Args:
+        model: The model
+        model_type: Type of model
+        
+    Returns:
+        target_layer: The layer to use for GradCAM
+    """
+    try:
+        if model_type == "mobilenetv4":
+            # For MobileNetV4, use the last convolutional layer in features
+            return model.features[-1]
+        elif model_type == "levit":
+            # For LeViT (transformer), use the last block
+            return model.blocks[-1]
+        elif model_type == "efficientvit":
+            # For EfficientViT, use the last stage
+            return model.stages[-1]
+        elif model_type == "gernet":
+            # For GENet, use the last stage
+            return model.stages[-1]
+        elif model_type == "regnetx":
+            # For RegNetX, use the last trunk layer
+            return model.trunk[-1]
+        else:
+            # Default: try to get the last feature layer
+            if hasattr(model, 'features'):
+                return model.features[-1]
+            elif hasattr(model, 'stages'):
+                return model.stages[-1]
+            elif hasattr(model, 'blocks'):
+                return model.blocks[-1]
+            else:
+                raise ValueError(f"Cannot determine target layer for model type: {model_type}")
+    except Exception as e:
+        logging.warning(f"Error getting target layer: {e}. Using fallback.")
+        # Fallback: try to get any reasonable last conv layer
+        for module in reversed(list(model.modules())):
+            if isinstance(module, nn.Conv2d):
+                return module
+        raise ValueError("Could not find suitable target layer for GradCAM")
+
+
+def apply_heatmap_on_image(img, cam, alpha=0.5):
+    """
+    Apply CAM heatmap overlay on the original image.
+    
+    Args:
+        img: Original image (PIL Image or numpy array)
+        cam: Class activation map
+        alpha: Overlay transparency
+        
+    Returns:
+        Heatmap overlay image as numpy array
+    """
+    # Convert PIL to numpy if needed
+    if isinstance(img, Image.Image):
+        img = np.array(img)
+    
+    # Resize CAM to match image size
+    h, w = img.shape[:2]
+    cam_resized = cv2.resize(cam, (w, h))
+    
+    # Convert CAM to heatmap
+    heatmap = cv2.applyColorMap(np.uint8(255 * cam_resized), cv2.COLORMAP_JET)
+    heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
+    
+    # Overlay heatmap on original image
+    overlay = cv2.addWeighted(img, 1 - alpha, heatmap, alpha, 0)
+    
+    return overlay
+
+
+def predict_image(image: np.ndarray, model_type: str) -> tuple[dict, np.ndarray]:
+    """
+    Predict eye disease from an uploaded image and generate attention heatmap.
 
     Args:
         image: Input image from Gradio
-        model_path: Path to the model state dict
         model_type: Type of model architecture
 
     Returns:
-        Dictionary of class probabilities
+        Tuple of (Dictionary of class probabilities, Heatmap overlay image)
     """
     try:
-
         logging.info("Starting prediction...")
+        
+        # Handle None image
+        if image is None:
+            logging.warning("No image provided.")
+            return {cls: 0.0 for cls in CLASSES}, None
+        
         # Load model
         model = load_model(model_type)
+        model.to(device)
 
         # Preprocess image
         logging.info("Preprocessing image...")
-        if image is None:
-            logging.warning("No image provided.")
-            return {cls: 0.0 for cls in CLASSES}
         transform = get_transform()
-        if image is None:
-            return {cls: 0.0 for cls in CLASSES}
 
-        # Convert numpy array to PIL Image
-        img = Image.fromarray(image).convert("RGB")
-        img_tensor = transform(img).unsqueeze(0).to(device)
+        # Convert numpy array to PIL Image and keep original for heatmap
+        img_pil = Image.fromarray(image).convert("RGB")
+        img_tensor = transform(img_pil).unsqueeze(0).to(device)
         logging.info("Image preprocessed successfully.")
 
-        # Make prediction
-        with torch.no_grad():
-            outputs = model(img_tensor)
-            probabilities = torch.nn.functional.softmax(outputs, dim=1)[0].cpu().numpy()
+        # Get target layer for GradCAM
+        try:
+            target_layer = get_target_layer(model, model_type)
+            logging.info(f"Using target layer: {target_layer}")
+            
+            # Initialize GradCAM
+            grad_cam = GradCAM(model, target_layer)
+            
+            # Generate CAM and prediction
+            cam, outputs = grad_cam.generate_cam(img_tensor)
+            
+            # Generate heatmap overlay
+            heatmap_overlay = apply_heatmap_on_image(img_pil, cam, alpha=0.4)
+            
+        except Exception as e:
+            logging.error(f"Error generating heatmap: {e}")
+            # Fallback: just do prediction without heatmap
+            with torch.no_grad():
+                outputs = model(img_tensor)
+            heatmap_overlay = np.array(img_pil)  # Return original image
+        
+        # Get probabilities
+        probabilities = F.softmax(outputs, dim=1)[0].cpu().detach().numpy()
 
-        # Return probabilities for each class
-        return {cls: float(prob) for cls, prob in zip(CLASSES, probabilities)}
+        # Return probabilities and heatmap
+        result_dict = {cls: float(prob) for cls, prob in zip(CLASSES, probabilities)}
+        
+        logging.info("Prediction completed successfully.")
+        return result_dict, heatmap_overlay
 
     except Exception as e:
         logging.error(f"Error during prediction: {e}")
-        return {cls: 0.0 for cls in CLASSES}
+        import traceback
+        traceback.print_exc()
+        return {cls: 0.0 for cls in CLASSES}, None
 
 
 def main():
@@ -158,12 +337,13 @@ def main():
 
             with gr.Column():
                 output_chart = gr.Label(label="Prediction")
+                output_heatmap = gr.Image(label="Attention Heatmap")
 
         # Process the image when the button is clicked
         submit_btn.click(
             fn=predict_image,
             inputs=[input_image, model_type],
-            outputs=output_chart,
+            outputs=[output_chart, output_heatmap],
         )
 
         # Examples section
@@ -171,7 +351,7 @@ def main():
         gr.Examples(
             examples=[],  # Add example paths here
             inputs=input_image,
-            outputs=[output_chart],
+            outputs=[output_chart, output_heatmap],
             fn=predict_image,
             cache_examples=True,
         )
@@ -187,7 +367,15 @@ def main():
                 - Enter the path to your trained model file (.pth)
                 - Select the model architecture that was used for training
             3. **Analyze**: Click the "Analyze Image" button to get results
-            4. **Interpret results**: The system will show the detected condition and probability distribution
+            4. **Interpret results**: The system will show the detected condition, probability distribution, and an attention heatmap
+            
+            ## Attention Heatmap:
+            
+            The attention heatmap visualizes which regions of the fundus image the model is focusing on when making its prediction.
+            - **Red/Yellow areas**: Regions the model considers most important for the diagnosis
+            - **Blue/Green areas**: Regions with less influence on the prediction
+            
+            This helps in understanding and validating the model's decision-making process.
             
             ## Model Information:
             

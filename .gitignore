@@ -183,3 +183,6 @@ model_outputs/
 
 # VS CODE
 .vscode/
+
+# Test images
+test_images/
