@@ -5,6 +5,7 @@
 import os
 import numpy as np
 import cv2
+import traceback
 
 import torch
 import torch.nn as nn
@@ -219,7 +220,6 @@ def predict_image(image: np.ndarray, model_type: str) -> tuple[dict, np.ndarray]
             
         except Exception as e:
             logging.error(f"Error generating heatmap: {e}")
-            import traceback
             traceback.print_exc()
             # Fallback: just do prediction without heatmap
             with torch.no_grad():
@@ -237,7 +237,6 @@ def predict_image(image: np.ndarray, model_type: str) -> tuple[dict, np.ndarray]
 
     except Exception as e:
         logging.error(f"Error during prediction: {e}")
-        import traceback
         traceback.print_exc()
         return {cls: 0.0 for cls in CLASSES}, None
 

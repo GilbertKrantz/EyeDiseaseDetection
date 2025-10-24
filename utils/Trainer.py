@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import gc
+import traceback
 
 from utils.Evaluator import ClassificationEvaluator
 from utils.Callback import EarlyStopping
@@ -272,15 +273,11 @@ def model_train(
             return results
         except Exception as viz_error:
             print(f"Error in visualization: {viz_error}")
-            import traceback
-
             traceback.print_exc()
             return {"accuracy": None}
 
     except Exception as e:
         print(f"Error occurred when training {model_name}: {e}")
-        import traceback
-
         traceback.print_exc()
         return {"accuracy": None}
     finally:
